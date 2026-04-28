@@ -5,294 +5,235 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 
 	"github.com/joho/godotenv"
-	"github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/option"
-	"github.com/openai/openai-go/v3/packages/param"
+	"github.com/sashabaranov/go-openai"
+	"github.com/sashabaranov/go-openai/jsonschema"
 )
 
 func main() {
+	if err := godotenv.Load(".env"); err != nil {
+		fmt.Fprintf(os.Stderr, "no .env file, using system env\n")
+	}
+
 	var prompt string
 	var model string
+
 	flag.StringVar(&prompt, "p", "", "Prompt to send to LLM")
-	flag.StringVar(&model, "m", "anthropic/claude-haiku-4.5", "Model name")
+	flag.StringVar(&model, "m", os.Getenv("MODEL_NAME"), "Model name")
 	flag.Parse()
 
 	if prompt == "" {
-		panic("Prompt must not be empty")
+		log.Fatal("Prompt must not be empty")
 	}
-
-	if err := godotenv.Load(".env"); err != nil {
-		fmt.Fprintf(os.Stderr, "no .env file, using system env")
+	if model == "" {
+		log.Fatal("Model must not be empty")
 	}
 
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	baseUrl := os.Getenv("OPENROUTER_BASE_URL")
+
 	if baseUrl == "" {
 		baseUrl = "https://openrouter.ai/api/v1"
 	}
 
 	if apiKey == "" {
-		panic("Env variable OPENROUTER_API_KEY not found")
+		log.Fatal("Env variable OPENROUTER_API_KEY not found")
 	}
 
-	client := openai.NewClient(option.WithAPIKey(apiKey), option.WithBaseURL(baseUrl))
+	config := openai.DefaultConfig(apiKey)
+	config.BaseURL = baseUrl
+	client := openai.NewClientWithConfig(config)
 
-	messages := make([]openai.ChatCompletionMessageParamUnion, 0)
-	messages = append(messages, openai.ChatCompletionMessageParamUnion{
-		OfUser: &openai.ChatCompletionUserMessageParam{
-			Content: openai.ChatCompletionUserMessageParamContentUnion{
-				OfString: openai.String(prompt),
-			},
+	messages := []openai.ChatCompletionMessage{
+		{
+			Role: openai.ChatMessageRoleSystem,
+			Content: `Ты - автономный агент-разработчик. 
+Сначала попытайся собрать информацию по проекту, а не галлюционируй. Это ОБЯЗАТЕЛЬНО.
+Для выполнения ЛЮБЫХ действий с файлами (чтение, запись, выполнение команд) ты ОБЯЗАН использовать предоставленные инструменты.
+`,
 		},
-	})
-	// You can use print statements as follows for debugging, they'll be visible when running tests.
+		{
+			Role:    openai.ChatMessageRoleUser,
+			Content: prompt,
+		},
+	}
+
 	fmt.Fprintln(os.Stderr, "Logs from your program will appear here!")
+
 	inCycle := true
 	for inCycle {
-		request := openai.ChatCompletionNewParams{
+		request := openai.ChatCompletionRequest{
 			Model:    model,
 			Messages: messages,
-			Tools: []openai.ChatCompletionToolUnionParam{
+			Tools: []openai.Tool{
 				{
-					OfFunction: &openai.ChatCompletionFunctionToolParam{
-						Function: openai.FunctionDefinitionParam{
-							Name:        "Read",
-							Description: param.NewOpt("Read and return the contents of a file"),
-							Parameters: openai.FunctionParameters{
-								"type": "object",
-								"properties": map[string]any{
-									"file_path": map[string]any{
-										"type":        "string",
-										"description": "The path to the file to read",
-									},
+					Type: openai.ToolTypeFunction,
+					Function: &openai.FunctionDefinition{
+						Name:        "Read",
+						Description: "Read and return the contents of a file",
+						Parameters: jsonschema.Definition{
+							Type: jsonschema.Object,
+							Properties: map[string]jsonschema.Definition{
+								"file_path": {
+									Type:        jsonschema.String,
+									Description: "The path to the file to read",
 								},
-								"required": []string{"file_path"},
 							},
+							Required: []string{"file_path"},
 						},
-						Type: "function",
 					},
 				},
 				{
-					OfFunction: &openai.ChatCompletionFunctionToolParam{
-						Function: openai.FunctionDefinitionParam{
-							Name:        "Write",
-							Description: param.NewOpt("Write content to a file"),
-							Parameters: openai.FunctionParameters{
-								"type": "object",
-								"properties": map[string]any{
-									"file_path": map[string]any{
-										"type":        "string",
-										"description": "The path of the file to write to",
-									},
-									"content": map[string]any{
-										"type":        "string",
-										"description": "The content to write to the file",
-									},
+					Type: openai.ToolTypeFunction,
+					Function: &openai.FunctionDefinition{
+						Name:        "Write",
+						Description: "Write content to a file",
+						Parameters: jsonschema.Definition{
+							Type: jsonschema.Object,
+							Properties: map[string]jsonschema.Definition{
+								"file_path": {
+									Type:        jsonschema.String,
+									Description: "The path of the file to write to",
 								},
-								"required": []string{"file_path", "content"},
+								"content": {
+									Type:        jsonschema.String,
+									Description: "The content to write to the file",
+								},
 							},
+							Required: []string{"file_path", "content"},
 						},
-						Type: "function",
 					},
 				},
 				{
-					OfFunction: &openai.ChatCompletionFunctionToolParam{
-						Function: openai.FunctionDefinitionParam{
-							Name:        "Bash",
-							Description: param.NewOpt("Execute a shell command"),
-							Parameters: openai.FunctionParameters{
-								"type": "object",
-								"properties": map[string]any{
-									"command": map[string]any{
-										"type":        "string",
-										"description": "The command to execute",
-									},
+					Type: openai.ToolTypeFunction,
+					Function: &openai.FunctionDefinition{
+						Name:        "Bash",
+						Description: "Execute a shell command",
+						Parameters: jsonschema.Definition{
+							Type: jsonschema.Object,
+							Properties: map[string]jsonschema.Definition{
+								"command": {
+									Type:        jsonschema.String,
+									Description: "The command to execute",
 								},
-								"required": []string{"command"},
 							},
+							Required: []string{"command"},
 						},
-						Type: "function",
 					},
 				},
 			},
 		}
-		resp, err := client.Chat.Completions.New(context.Background(), request)
+
+		resp, err := client.CreateChatCompletion(context.Background(), request)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
 		if len(resp.Choices) == 0 {
-			panic("No choices in response")
+			log.Fatal("No choices in response")
 		}
-		data, err := json.MarshalIndent(resp, "", "  ")
+
+		data, _ := json.MarshalIndent(resp, "", "  ")
 		fmt.Fprintln(os.Stderr, string(data))
 
-		if len(resp.Choices[0].Message.ToolCalls) > 0 {
-			switch {
-			case resp.Choices[0].Message.ToolCalls[0].Function.Name == "Read":
-				toolCall := resp.Choices[0].Message.ToolCalls[0]
-				args := toolCall.Function.Arguments
+		msg := resp.Choices[0].Message
+		if len(msg.ToolCalls) > 0 {
+			// Append assistant's message with tool calls to history
+			messages = append(messages, msg)
 
-				assistantMsg := resp.Choices[0].Message
-				messages = append(messages, openai.ChatCompletionMessageParamUnion{
-					OfAssistant: &openai.ChatCompletionAssistantMessageParam{
-						Content: openai.ChatCompletionAssistantMessageParamContentUnion{
-							OfString: param.NewOpt[string](assistantMsg.Content),
-						},
-						ToolCalls: []openai.ChatCompletionMessageToolCallUnionParam{
-							{
-								OfFunction: &openai.ChatCompletionMessageFunctionToolCallParam{
-									ID: toolCall.ID,
-									Function: openai.ChatCompletionMessageFunctionToolCallFunctionParam{
-										Arguments: args,
-										Name:      "Read",
-									},
-									Type: "function",
-								},
-							},
-						},
-						Role: "assistant",
-					},
-				})
+			for _, toolCall := range msg.ToolCalls {
+				switch toolCall.Function.Name {
+				case "Read":
+					type props struct {
+						FilePath string `json:"file_path"`
+					}
+					var prop props
+					json.Unmarshal([]byte(toolCall.Function.Arguments), &prop)
 
-				type props struct {
-					FilePath string `json:"file_path"`
-				}
-				var prop props
-				json.Unmarshal([]byte(args), &prop)
+					fmt.Fprintln(os.Stderr, prop.FilePath)
 
-				fmt.Fprintln(os.Stderr, prop.FilePath)
-
-				if contents, errF := os.ReadFile(prop.FilePath); errF != nil {
-					fmt.Fprintln(os.Stderr, fmt.Errorf("got error while reading file: %v", errF))
-				} else {
-					messages = append(messages, openai.ChatCompletionMessageParamUnion{
-						OfTool: &openai.ChatCompletionToolMessageParam{
-							Content: openai.ChatCompletionToolMessageParamContentUnion{
-								OfString: param.NewOpt[string](string(contents)),
-							},
+					if contents, errF := os.ReadFile(prop.FilePath); errF != nil {
+						errMsj := fmt.Sprintf("got error while reading file: %v", errF)
+						fmt.Fprintln(os.Stderr, errMsj)
+						messages = append(messages, openai.ChatCompletionMessage{
+							Role:       openai.ChatMessageRoleTool,
+							Content:    errMsj,
 							ToolCallID: toolCall.ID,
-							Role:       "tool",
-						},
-					})
-				}
-			case resp.Choices[0].Message.ToolCalls[0].Function.Name == "Write":
-				toolCall := resp.Choices[0].Message.ToolCalls[0]
-				args := toolCall.Function.Arguments
-
-				assistantMsg := resp.Choices[0].Message
-				messages = append(messages, openai.ChatCompletionMessageParamUnion{
-					OfAssistant: &openai.ChatCompletionAssistantMessageParam{
-						Content: openai.ChatCompletionAssistantMessageParamContentUnion{
-							OfString: param.NewOpt[string](assistantMsg.Content),
-						},
-						ToolCalls: []openai.ChatCompletionMessageToolCallUnionParam{
-							{
-								OfFunction: &openai.ChatCompletionMessageFunctionToolCallParam{
-									ID: toolCall.ID,
-									Function: openai.ChatCompletionMessageFunctionToolCallFunctionParam{
-										Arguments: args,
-										Name:      "Write",
-									},
-									Type: "function",
-								},
-							},
-						},
-						Role: "assistant",
-					},
-				})
-
-				type props struct {
-					FilePath string `json:"file_path"`
-					Content  string `json:"content"`
-				}
-				var prop props
-				json.Unmarshal([]byte(args), &prop)
-
-				fmt.Fprintln(os.Stderr, prop.FilePath)
-				fmt.Fprintln(os.Stderr, prop.Content)
-
-				if errW := os.WriteFile(prop.FilePath, []byte(prop.Content), 0644); errW != nil {
-					errMsj := fmt.Sprintf("failed to write file: %v", errW)
-					fmt.Fprintln(os.Stderr, errMsj)
-				} else {
-					successMsg := "File written successfully"
-					fmt.Fprintln(os.Stderr, successMsg)
-
-					messages = append(messages, openai.ChatCompletionMessageParamUnion{
-						OfTool: &openai.ChatCompletionToolMessageParam{
-							Content:    openai.ChatCompletionToolMessageParamContentUnion{OfString: param.NewOpt[string](successMsg)},
-							ToolCallID: toolCall.ID,
-							Role:       "tool",
-						},
-					})
-				}
-			case resp.Choices[0].Message.ToolCalls[0].Function.Name == "Bash":
-				toolCall := resp.Choices[0].Message.ToolCalls[0]
-				args := toolCall.Function.Arguments
-
-				assistantMsg := resp.Choices[0].Message
-				messages = append(messages, openai.ChatCompletionMessageParamUnion{
-					OfAssistant: &openai.ChatCompletionAssistantMessageParam{
-						Content: openai.ChatCompletionAssistantMessageParamContentUnion{
-							OfString: param.NewOpt[string](assistantMsg.Content),
-						},
-						ToolCalls: []openai.ChatCompletionMessageToolCallUnionParam{
-							{
-								OfFunction: &openai.ChatCompletionMessageFunctionToolCallParam{
-									ID: toolCall.ID,
-									Function: openai.ChatCompletionMessageFunctionToolCallFunctionParam{
-										Arguments: args,
-										Name:      "Bash",
-									},
-									Type: "function",
-								},
-							},
-						},
-						Role: "assistant",
-					},
-				})
-
-				type props struct {
-					Command string `json:"command"`
-				}
-				var prop props
-				json.Unmarshal([]byte(args), &prop)
-
-				fmt.Fprintln(os.Stderr, prop.Command)
-
-				if prop.Command != "" {
-					fmt.Fprintln(os.Stderr, "Executing command:", prop.Command)
-
-					cmd := exec.Command("sh", "-c", prop.Command)
-
-					output, errE := cmd.CombinedOutput()
-
-					var responseContent string
-					if errE != nil {
-						responseContent = fmt.Sprintf("Command failed: %v\nOutput: %s", errE, string(output))
-						fmt.Fprintln(os.Stderr, responseContent)
+						})
 					} else {
-						responseContent = fmt.Sprintf("Command executed successfully:\n%s", string(output))
-						fmt.Fprintln(os.Stderr, "Command success")
+						messages = append(messages, openai.ChatCompletionMessage{
+							Role:       openai.ChatMessageRoleTool,
+							Content:    string(contents),
+							ToolCallID: toolCall.ID,
+						})
 					}
 
-					messages = append(messages, openai.ChatCompletionMessageParamUnion{
-						OfTool: &openai.ChatCompletionToolMessageParam{
-							Content:    openai.ChatCompletionToolMessageParamContentUnion{OfString: param.NewOpt[string](responseContent)},
+				case "Write":
+					type props struct {
+						FilePath string `json:"file_path"`
+						Content  string `json:"content"`
+					}
+					var prop props
+					json.Unmarshal([]byte(toolCall.Function.Arguments), &prop)
+
+					fmt.Fprintln(os.Stderr, prop.FilePath)
+					fmt.Fprintln(os.Stderr, prop.Content)
+
+					if errW := os.WriteFile(prop.FilePath, []byte(prop.Content), 0644); errW != nil {
+						errMsj := fmt.Sprintf("failed to write file: %v", errW)
+						fmt.Fprintln(os.Stderr, errMsj)
+						messages = append(messages, openai.ChatCompletionMessage{
+							Role:       openai.ChatMessageRoleTool,
+							Content:    errMsj,
 							ToolCallID: toolCall.ID,
-							Role:       "tool",
-						},
-					})
+						})
+					} else {
+						successMsg := "File written successfully"
+						fmt.Fprintln(os.Stderr, successMsg)
+						messages = append(messages, openai.ChatCompletionMessage{
+							Role:       openai.ChatMessageRoleTool,
+							Content:    successMsg,
+							ToolCallID: toolCall.ID,
+						})
+					}
+
+				case "Bash":
+					type props struct {
+						Command string `json:"command"`
+					}
+					var prop props
+					json.Unmarshal([]byte(toolCall.Function.Arguments), &prop)
+
+					fmt.Fprintln(os.Stderr, prop.Command)
+
+					if prop.Command != "" {
+						fmt.Fprintln(os.Stderr, "Executing command:", prop.Command)
+						cmd := exec.Command("sh", "-c", prop.Command)
+						output, errE := cmd.CombinedOutput()
+
+						var responseContent string
+						if errE != nil {
+							responseContent = fmt.Sprintf("Command failed: %v\nOutput: %s", errE, string(output))
+							fmt.Fprintln(os.Stderr, responseContent)
+						} else {
+							responseContent = fmt.Sprintf("Command executed successfully:\n%s", string(output))
+							fmt.Fprintln(os.Stderr, "Command success")
+						}
+
+						messages = append(messages, openai.ChatCompletionMessage{
+							Role:       openai.ChatMessageRoleTool,
+							Content:    responseContent,
+							ToolCallID: toolCall.ID,
+						})
+					}
 				}
 			}
-
 		} else {
-			fmt.Print(resp.Choices[0].Message.Content)
+			fmt.Print(msg.Content)
 			inCycle = false
 		}
 	}
