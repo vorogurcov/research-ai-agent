@@ -1,4 +1,4 @@
-module github.com/codecrafters-io/claude-code-starter-go
+module github.com/vorogurcov/ai-agent
 
 go 1.25
 
