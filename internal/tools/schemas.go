@@ -2,7 +2,6 @@ package tools
 
 import "github.com/sashabaranov/go-openai/jsonschema"
 
-// shared parameter schemas
 func filePathSchema() jsonschema.Definition {
 	return jsonschema.Definition{
 		Type: jsonschema.Object,
@@ -16,7 +15,6 @@ func filePathSchema() jsonschema.Definition {
 	}
 }
 
-// shared parameter schemas
 func fileWriteSchema() jsonschema.Definition {
 	return jsonschema.Definition{
 		Type: jsonschema.Object,

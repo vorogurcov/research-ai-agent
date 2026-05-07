@@ -3,6 +3,7 @@ package yandex
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -90,5 +91,22 @@ func (c *SearchClient) Search(ctx context.Context, query string, page int) (stri
 	}
 	b, err := json.Marshal(ans)
 
-	return string(b), nil
+	var sr struct {
+		RawData string `json:"rawData"`
+	}
+	if err = json.Unmarshal(b, &sr); err != nil {
+		err = fmt.Errorf("failed to decode yandex response json: %w", err)
+		return "", err
+	}
+
+	xmlBytes, err := base64.StdEncoding.DecodeString(sr.RawData)
+	if err != nil {
+		err = fmt.Errorf("failed to decode yandex rawData (base64): %w", err)
+		return "", err
+	}
+	res, err := mapXMLToResultString(xmlBytes)
+	if err != nil {
+		return "", err
+	}
+	return res, nil
 }

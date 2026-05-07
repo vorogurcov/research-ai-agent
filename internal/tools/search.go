@@ -1,13 +1,16 @@
 package tools
 
 import (
+	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/sashabaranov/go-openai"
@@ -63,7 +66,6 @@ func (r *Registry) registerSearch() {
 		ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 		defer cancel()
 
-		// Это запрос: используем Tavily Search.
 		r.appendSearchLog("YANDEX search start")
 		resp, err := yandexClient.Search(ctx, p.Query, intOrDefault(&p.Page, 0))
 
@@ -72,24 +74,9 @@ func (r *Registry) registerSearch() {
 			r.appendSearchLog(fmt.Sprintf("ERROR yandex search: %v", err))
 			return "", err
 		}
-		var sr struct {
-			RawData string `json:"rawData"`
-		}
-		if err := json.Unmarshal([]byte(resp), &sr); err != nil {
-			err = fmt.Errorf("failed to decode yandex response json: %w", err)
-			r.writeError("tools.Search.yandex.unmarshal", err)
-			r.appendSearchLog(fmt.Sprintf("ERROR yandex unmarshal: %v", err))
-			return "", err
-		}
-		xmlBytes, err := base64.StdEncoding.DecodeString(sr.RawData)
-		if err != nil {
-			err = fmt.Errorf("failed to decode yandex rawData (base64): %w", err)
-			r.writeError("tools.Search.yandex.base64", err)
-			r.appendSearchLog(fmt.Sprintf("ERROR yandex base64: %v", err))
-			return "", err
-		}
 
-		return string(xmlBytes), nil
+		r.appendSearchLogPayload("Search", resp)
+		return resp, nil
 	})
 }
 
@@ -103,11 +90,10 @@ func intOrDefault(p *string, def int) int {
 }
 
 func (r *Registry) appendSearchLog(line string) {
-	// Best-effort logging; never break tool execution because of log IO.
 	if r == nil {
 		return
 	}
-	path := filepath.Join(r.workspaceRoot, ".search_log.txt")
+	path := r.searchLogPath()
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return
@@ -116,4 +102,79 @@ func (r *Registry) appendSearchLog(line string) {
 
 	ts := time.Now().Format(time.RFC3339)
 	_, _ = f.WriteString(ts + " " + line + "\n")
+}
+
+func (r *Registry) appendSearchLogPayload(toolName string, payload string) {
+	if r == nil {
+		return
+	}
+	prettyPayload := prettifyPayloadForLog(payload)
+	path := r.searchLogPath()
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	defer func() { _ = f.Close() }()
+
+	ts := time.Now().Format(time.RFC3339)
+	_, _ = f.WriteString(fmt.Sprintf("%s PAYLOAD %s BEGIN chars=%d pretty_chars=%d\n", ts, toolName, len(payload), len(prettyPayload)))
+	_, _ = f.WriteString(prettyPayload)
+	if !strings.HasSuffix(prettyPayload, "\n") {
+		_, _ = f.WriteString("\n")
+	}
+	_, _ = f.WriteString(fmt.Sprintf("%s PAYLOAD %s END\n", ts, toolName))
+}
+
+func (r *Registry) searchLogPath() string {
+	logDir := filepath.Join(r.workspaceRoot, "log")
+	if err := os.MkdirAll(logDir, 0o755); err == nil {
+		return filepath.Join(logDir, ".search_log.txt")
+	}
+	// Fallback to workspace root if log dir is unavailable.
+	return filepath.Join(r.workspaceRoot, ".search_log.txt")
+}
+
+func prettifyPayloadForLog(payload string) string {
+	trimmed := strings.TrimSpace(payload)
+	if trimmed == "" {
+		return payload
+	}
+
+	var jsonBuf bytes.Buffer
+	if json.Valid([]byte(trimmed)) && json.Indent(&jsonBuf, []byte(trimmed), "", "  ") == nil {
+		return jsonBuf.String()
+	}
+
+	if strings.HasPrefix(trimmed, "<") {
+		if pretty, err := prettifyXML(trimmed); err == nil {
+			return pretty
+		}
+	}
+
+	return payload
+}
+
+func prettifyXML(raw string) (string, error) {
+	dec := xml.NewDecoder(strings.NewReader(raw))
+	var buf bytes.Buffer
+	enc := xml.NewEncoder(&buf)
+	enc.Indent("", "  ")
+
+	for {
+		tok, err := dec.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+		if err := enc.EncodeToken(tok); err != nil {
+			return "", err
+		}
+	}
+
+	if err := enc.Flush(); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
 }

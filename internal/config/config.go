@@ -72,14 +72,14 @@ func Load(p LoadParams) (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("failed to get working directory: %w", err)
 	}
-	rootLog := filepath.Clean(cwd) + "/log"
+	workspaceRoot := filepath.Clean(cwd)
 
 	return Config{
 		Prompt:        p.Prompt,
 		ModelName:     model,
 		AIApiKey:      apiKey,
 		APIBaseURL:    baseURL,
-		WorkspaceRoot: rootLog,
+		WorkspaceRoot: workspaceRoot,
 		SystemPrompt:  p.SystemPrompt,
 	}, nil
 }

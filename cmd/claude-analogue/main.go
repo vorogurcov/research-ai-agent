@@ -21,7 +21,7 @@ func main() {
 	flag.StringVar(&modelFlag, "m", "", "Model name")
 	flag.Parse()
 
-	logger, _ := (&logger2.FSLogger{}).GetLogger("log.txt", "PROD")
+	logger, _ := (&logger2.FSLogger{}).GetLogger("log/log.txt", "PROD")
 	_ = func() error {
 		if logger == nil {
 			return nil
@@ -41,9 +41,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	//sigCh, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	//defer stop()
-	l, lerr := (&logger2.FSLogger{}).GetLogger(filepath.Join(cfg.WorkspaceRoot, "log.txt"), "PROD")
+	l, lerr := (&logger2.FSLogger{}).GetLogger(filepath.Join(cfg.WorkspaceRoot, "log", "log.txt"), "PROD")
 	if lerr == nil && l != nil {
 		logger = l
 		_ = logger.Write("Logger initialized at workspace: " + cfg.WorkspaceRoot)

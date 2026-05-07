@@ -10,6 +10,7 @@ import (
 	"github.com/chromedp/chromedp"
 	"github.com/sashabaranov/go-openai"
 	"github.com/sashabaranov/go-openai/jsonschema"
+	"github.com/vorogurcov/ai-agent/internal/utils"
 )
 
 func (r *Registry) registerScrape() {
@@ -81,12 +82,22 @@ func (r *Registry) registerScrape() {
 			r.appendSearchLog(fmt.Sprintf("ERROR chromedp: %v", err))
 			return "", err
 		}
-		content, err := runAnalyzeAgent(htmlContent, p.Needs)
+
+		cleaned, err := utils.CleanHtml(htmlContent)
+		if err != nil {
+			r.writeError("tools.Scrape.cleanHtml", err)
+			r.appendSearchLog(fmt.Sprintf("ERROR cleanHtml: %v", err))
+			return "", err
+		}
+		r.appendSearchLogPayload("Scrape.CleanHTML", cleaned)
+
+		content, err := runAnalyzeAgent(cleaned, p.Needs)
 		if err != nil {
 			r.writeError("tools.Scrape.runAnalyzeAgent", err)
 			r.appendSearchLog(fmt.Sprintf("ERROR runAnalyzeAgent: %v", err))
 			return "", err
 		}
+		r.appendSearchLogPayload("Scrape", content)
 		r.appendSearchLog(fmt.Sprintf("DONE ok: output_chars=%d", len(content)))
 		return content, nil
 	})
