@@ -13,6 +13,9 @@ func (r Runner) dispatchToolCall(tc openai.ToolCall) openai.ChatCompletionMessag
 
 	tool := findTool(r.Tools, name)
 	if tool == nil || tool.Function == nil {
+		if r.Logger != nil {
+			_ = r.Logger.Write("ERROR [tool dispatch]: unknown tool: " + name)
+		}
 		return openai.ChatCompletionMessage{
 			Role:       openai.ChatMessageRoleTool,
 			Content:    fmt.Sprintf("unknown tool: %s", name),
@@ -21,6 +24,9 @@ func (r Runner) dispatchToolCall(tc openai.ToolCall) openai.ChatCompletionMessag
 	}
 
 	if r.Caller == nil {
+		if r.Logger != nil {
+			_ = r.Logger.Write("ERROR [tool dispatch]: tool dispatcher not configured")
+		}
 		return openai.ChatCompletionMessage{
 			Role:       openai.ChatMessageRoleTool,
 			Content:    "tool dispatcher not configured",
@@ -30,6 +36,9 @@ func (r Runner) dispatchToolCall(tc openai.ToolCall) openai.ChatCompletionMessag
 
 	out, err := r.Caller.Call(name, args)
 	if err != nil {
+		if r.Logger != nil {
+			_ = r.Logger.Write("ERROR [tool dispatch]: tool call failed: " + err.Error())
+		}
 		return openai.ChatCompletionMessage{
 			Role:       openai.ChatMessageRoleTool,
 			Content:    err.Error(),

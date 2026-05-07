@@ -21,16 +21,32 @@ func fileWriteSchema() jsonschema.Definition {
 	return jsonschema.Definition{
 		Type: jsonschema.Object,
 		Properties: map[string]jsonschema.Definition{
+			"task_name": {
+				Type:        jsonschema.String,
+				Description: "A short name for the current task (used to group all writes under writes/{task_name}_.../).",
+			},
 			"file_path": {
 				Type:        jsonschema.String,
-				Description: "The path of the file to write to",
+				Description: "The file name to write (directories will be ignored; output is always placed under writes/...).",
 			},
 			"content": {
 				Type:        jsonschema.String,
 				Description: "The content to write to the file",
 			},
 		},
-		Required: []string{"file_path", "content"},
+		Required: []string{"task_name", "file_path", "content"},
+	}
+}
+
+func writesLsSchema() jsonschema.Definition {
+	return jsonschema.Definition{
+		Type: jsonschema.Object,
+		Properties: map[string]jsonschema.Definition{
+			"path": {
+				Type:        jsonschema.String,
+				Description: "Optional subpath within writes/ to list (relative). Empty means list writes/ root.",
+			},
+		},
 	}
 }
 

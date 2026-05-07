@@ -19,15 +19,18 @@ func (r *Registry) registerBash() {
 		}
 		var p props
 		if err := mustUnmarshal(rawArgs, &p); err != nil {
+			r.writeError("tools.Bash.mustUnmarshal", err)
 			return "", fmt.Errorf("invalid arguments: %w", err)
 		}
 		if p.Command == "" {
+			r.writeError("tools.Bash", fmt.Errorf("command must not be empty"))
 			return "", fmt.Errorf("command must not be empty")
 		}
 
 		cmd := buildShellCommand(p.Command)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
+			r.writeError("tools.Bash.cmd.CombinedOutput", err)
 			return fmt.Sprintf("Command failed: %v\nOutput: %s", err, string(out)), nil
 		}
 		return fmt.Sprintf("Command executed successfully:\n%s", string(out)), nil
