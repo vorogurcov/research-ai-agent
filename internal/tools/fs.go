@@ -171,7 +171,7 @@ func (r *Registry) safeWritesDirPath(p string) (absDir string, relBase string, e
 func (r *Registry) registerWrite() {
 	r.registerTool(openai.FunctionDefinition{
 		Name:        "Write",
-		Description: "Write content to a file. Output is always written under writes/{task_name}_{datetime}_{index}/ to avoid creating files across the repo.",
+		Description: fmt.Sprintf("Write content to a file. Files are always stored under writes/%v/{task_name}_{datetime}_{index}/ (inside workspace). Return value is a path relative to writes/ so it can be passed directly to Read (without writes/ prefix).", r.GetTaskResultPath()),
 		Parameters:  fileWriteSchema(),
 	}, func(rawArgs string) (string, error) {
 		type props struct {
@@ -195,8 +195,9 @@ func (r *Registry) registerWrite() {
 			filename = "output.txt"
 		}
 
-		dir := filepath.Join("writes", r.nextWriteDir(task))
-		path, err := r.safePath(filepath.Join(dir, filename))
+		dirRelToWrites := filepath.Join(r.GetTaskResultPath(), r.nextWriteDir(task))
+		pathUnderWrites := filepath.Join("writes", dirRelToWrites, filename)
+		path, err := r.safePath(pathUnderWrites)
 		if err != nil {
 			r.writeError("tools.Write.safePath", err)
 			return "", err
@@ -209,7 +210,7 @@ func (r *Registry) registerWrite() {
 			r.writeError("tools.Write.os.WriteFile", err)
 			return "", fmt.Errorf("failed to write file: %w", err)
 		}
-		return "File written successfully: " + filepath.ToSlash(filepath.Join(dir, filename)), nil
+		return "File written successfully: " + filepath.ToSlash(filepath.Join(dirRelToWrites, filename)), nil
 	})
 }
 

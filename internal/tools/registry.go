@@ -18,8 +18,9 @@ type Registry struct {
 	Logger        logger.Logger
 	SearchLogger  logger.Logger
 
-	mu            sync.Mutex
-	writeSessions map[string]*writeSession
+	mu             sync.Mutex
+	writeSessions  map[string]*writeSession
+	taskResultPath string
 }
 
 type writeSession struct {
@@ -29,11 +30,12 @@ type writeSession struct {
 
 func NewRegistry(workspaceRoot string, logger logger.Logger, searchLogger logger.Logger) *Registry {
 	r := &Registry{
-		workspaceRoot: workspaceRoot,
-		handlers:      map[string]func(rawArgs string) (string, error){},
-		Logger:        logger,
-		SearchLogger:  searchLogger,
-		writeSessions: map[string]*writeSession{},
+		workspaceRoot:  workspaceRoot,
+		handlers:       map[string]func(rawArgs string) (string, error){},
+		Logger:         logger,
+		SearchLogger:   searchLogger,
+		writeSessions:  map[string]*writeSession{},
+		taskResultPath: fmt.Sprintf("TASK_%s", timeNowCompact()),
 	}
 
 	r.registerRead()
@@ -108,4 +110,8 @@ func (r *Registry) writeError(context string, err error) {
 		return
 	}
 	_ = r.Logger.WriteNonPrettified("ERROR [" + context + "]: " + err.Error())
+}
+
+func (r *Registry) GetTaskResultPath() string {
+	return r.taskResultPath
 }
