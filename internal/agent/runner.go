@@ -8,17 +8,14 @@ import (
 	"strings"
 
 	"github.com/sashabaranov/go-openai"
+	"github.com/vorogurcov/ai-agent/internal/utils/logger"
 )
-
-type Logger interface {
-	Write(text string) error
-}
 
 type Runner struct {
 	Client *openai.Client
 	Tools  []openai.Tool
 	Caller ToolCaller
-	Logger Logger
+	Logger logger.Logger
 }
 
 type ToolCaller interface {
@@ -62,13 +59,13 @@ func (r Runner) Run(model, systemPrompt, userPrompt string) (*string, error) {
 		resp, err := r.Client.CreateChatCompletion(context.Background(), req)
 		if err != nil {
 			if r.Logger != nil {
-				_ = r.Logger.Write("ERROR [llm.CreateChatCompletion]: " + err.Error())
+				_ = r.Logger.WriteNonPrettified("ERROR [llm.CreateChatCompletion]: " + err.Error())
 			}
 			return nil, fmt.Errorf("error: %w", err)
 		}
 		if len(resp.Choices) == 0 {
 			if r.Logger != nil {
-				_ = r.Logger.Write("ERROR [llm.CreateChatCompletion]: no choices in response")
+				_ = r.Logger.WriteNonPrettified("ERROR [llm.CreateChatCompletion]: no choices in response")
 			}
 			return nil, fmt.Errorf("no choices in response")
 		}
@@ -80,7 +77,7 @@ func (r Runner) Run(model, systemPrompt, userPrompt string) (*string, error) {
 			if data, mErr := json.MarshalIndent(resp, "", "  "); mErr == nil {
 				fmt.Fprintln(os.Stderr, string(data))
 			} else if r.Logger != nil {
-				_ = r.Logger.Write("ERROR [json.MarshalIndent(resp)]: " + mErr.Error())
+				_ = r.Logger.WriteNonPrettified("ERROR [json.MarshalIndent(resp)]: " + mErr.Error())
 			}
 		} else {
 			// Keep it readable: show either tools being called or the final answer snippet.

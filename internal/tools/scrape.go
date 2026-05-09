@@ -39,21 +39,21 @@ func (r *Registry) registerScrape() {
 		var p props
 		if err := mustUnmarshal(rawArgs, &p); err != nil {
 			r.writeError("tools.Scrape.mustUnmarshal", err)
-			r.appendSearchLog(fmt.Sprintf("ERROR mustUnmarshal: %v | rawArgs=%q", err, rawArgs))
+			r.SearchLogger.WriteNonPrettified(fmt.Sprintf("ERROR mustUnmarshal: %v | rawArgs=%q", err, rawArgs))
 			return "", fmt.Errorf("invalid arguments: %w", err)
 		}
-		r.appendSearchLog(fmt.Sprintf("CALL scrape url=%q", p.Url))
+		r.SearchLogger.WriteNonPrettified(fmt.Sprintf("CALL scrape url=%q", p.Url))
 
 		if p.Url == "" {
 			err := fmt.Errorf("url must not be empty")
 			r.writeError("tools.Scrape.validate", err)
-			r.appendSearchLog("ERROR validate: url is empty")
+			r.SearchLogger.WriteNonPrettified("ERROR validate: url is empty")
 			return "", err
 		}
 		if p.Needs == "" {
 			err := fmt.Errorf("needs must not be empty")
 			r.writeError("tools.Scrape.validate", err)
-			r.appendSearchLog("ERROR validate: needs is empty")
+			r.SearchLogger.WriteNonPrettified("ERROR validate: needs is empty")
 			return "", err
 		}
 
@@ -61,7 +61,7 @@ func (r *Registry) registerScrape() {
 		if parseErr != nil || u.Scheme == "" || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
 			err := fmt.Errorf("invalid url: %q", p.Url)
 			r.writeError("tools.Scrape.validate", err)
-			r.appendSearchLog("ERROR validate: invalid url")
+			r.SearchLogger.WriteNonPrettified("ERROR validate: invalid url")
 			return "", err
 		}
 
@@ -79,14 +79,14 @@ func (r *Registry) registerScrape() {
 		)
 		if err != nil {
 			r.writeError("tools.Scrape.chromedp", err)
-			r.appendSearchLog(fmt.Sprintf("ERROR chromedp: %v", err))
+			r.SearchLogger.WriteNonPrettified(fmt.Sprintf("ERROR chromedp: %v", err))
 			return "", err
 		}
 
 		cleaned, err := utils.CleanHtml(htmlContent)
 		if err != nil {
 			r.writeError("tools.Scrape.cleanHtml", err)
-			r.appendSearchLog(fmt.Sprintf("ERROR cleanHtml: %v", err))
+			r.SearchLogger.WriteNonPrettified(fmt.Sprintf("ERROR cleanHtml: %v", err))
 			return "", err
 		}
 		r.appendSearchLogPayload("Scrape.CleanHTML", cleaned)
@@ -94,11 +94,11 @@ func (r *Registry) registerScrape() {
 		content, err := runAnalyzeAgent(cleaned, p.Needs)
 		if err != nil {
 			r.writeError("tools.Scrape.runAnalyzeAgent", err)
-			r.appendSearchLog(fmt.Sprintf("ERROR runAnalyzeAgent: %v", err))
+			r.SearchLogger.WriteNonPrettified(fmt.Sprintf("ERROR runAnalyzeAgent: %v", err))
 			return "", err
 		}
 		r.appendSearchLogPayload("Scrape", content)
-		r.appendSearchLog(fmt.Sprintf("DONE ok: output_chars=%d", len(content)))
+		r.SearchLogger.WriteNonPrettified(fmt.Sprintf("DONE ok: output_chars=%d", len(content)))
 		return content, nil
 	})
 }

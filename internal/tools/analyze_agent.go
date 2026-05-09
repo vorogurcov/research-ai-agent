@@ -41,7 +41,7 @@ func runAnalyzeAgent(html, needs string) (string, error) {
 	}
 
 	client := llm.NewAPIClient(cfg.AIApiKey, cfg.APIBaseURL)
-	reg := NewRegistry(cfg.WorkspaceRoot, nil)
+	reg := NewRegistry(cfg.WorkspaceRoot, nil, nil)
 
 	runner := agent.Runner{
 		Client: client,
@@ -56,4 +56,3 @@ func runAnalyzeAgent(html, needs string) (string, error) {
 	}
 	return *ans, nil
 }
-

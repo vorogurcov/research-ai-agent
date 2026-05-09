@@ -21,34 +21,37 @@ func main() {
 	flag.StringVar(&modelFlag, "m", "", "Model name")
 	flag.Parse()
 
-	logger, _ := (&logger2.FSLogger{}).GetLogger("log/log.txt", "PROD")
-	_ = func() error {
-		if logger == nil {
-			return nil
-		}
-		return logger.Write("Logs from your program will appear here!")
-	}()
-
 	cfg, err := config.Load(config.LoadParams{
 		ModelFlag: modelFlag,
 		Prompt:    prompt,
 	})
+
+	logger, _ := logger2.GetLogger(filepath.Join(cfg.WorkspaceRoot, "log", "log.txt"), "PROD")
+	_ = func() error {
+		if logger == nil {
+			return nil
+		}
+		return logger.WriteNonPrettified("Logs from your program will appear here!")
+	}()
+
 	if err != nil {
 		if logger != nil {
-			_ = logger.Write("ERROR [config.Load]: " + err.Error())
+			_ = logger.WriteNonPrettified("ERROR [config.Load]: " + err.Error())
 		}
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
-	l, lerr := (&logger2.FSLogger{}).GetLogger(filepath.Join(cfg.WorkspaceRoot, "log", "log.txt"), "PROD")
-	if lerr == nil && l != nil {
-		logger = l
-		_ = logger.Write("Logger initialized at workspace: " + cfg.WorkspaceRoot)
-	}
+	searchLogger, _ := logger2.GetLogger(filepath.Join(cfg.WorkspaceRoot, "log", ".search_log.txt"), "PROD")
+	_ = func() error {
+		if searchLogger == nil {
+			return nil
+		}
+		return searchLogger.WriteNonPrettified("Search logs from your program will appear here!")
+	}()
 
 	client := llm.NewAPIClient(cfg.AIApiKey, cfg.APIBaseURL)
-	reg := tools.NewRegistry(cfg.WorkspaceRoot, logger)
+	reg := tools.NewRegistry(cfg.WorkspaceRoot, logger, searchLogger)
 
 	runner := agent.Runner{
 		Client: client,

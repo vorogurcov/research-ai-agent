@@ -8,13 +8,15 @@ import (
 	"time"
 
 	"github.com/sashabaranov/go-openai"
+	"github.com/vorogurcov/ai-agent/internal/utils/logger"
 )
 
 type Registry struct {
 	workspaceRoot string
 	handlers      map[string]func(rawArgs string) (string, error)
 	tools         []openai.Tool
-	Logger        Logger
+	Logger        logger.Logger
+	SearchLogger  logger.Logger
 
 	mu            sync.Mutex
 	writeSessions map[string]*writeSession
@@ -25,15 +27,12 @@ type writeSession struct {
 	nextIndex int
 }
 
-type Logger interface {
-	Write(text string) error
-}
-
-func NewRegistry(workspaceRoot string, logger Logger) *Registry {
+func NewRegistry(workspaceRoot string, logger logger.Logger, searchLogger logger.Logger) *Registry {
 	r := &Registry{
 		workspaceRoot: workspaceRoot,
 		handlers:      map[string]func(rawArgs string) (string, error){},
 		Logger:        logger,
+		SearchLogger:  searchLogger,
 		writeSessions: map[string]*writeSession{},
 	}
 
@@ -108,5 +107,5 @@ func (r *Registry) writeError(context string, err error) {
 	if r.Logger == nil || err == nil {
 		return
 	}
-	_ = r.Logger.Write("ERROR [" + context + "]: " + err.Error())
+	_ = r.Logger.WriteNonPrettified("ERROR [" + context + "]: " + err.Error())
 }
