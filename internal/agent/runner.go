@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/sashabaranov/go-openai"
+	session2 "github.com/vorogurcov/ai-agent/internal/agent/session"
 	"github.com/vorogurcov/ai-agent/internal/utils/logger"
 )
 
@@ -23,10 +24,14 @@ type ToolCaller interface {
 }
 
 func (r Runner) Run(model, systemPrompt, userPrompt string) (*string, error) {
-	messages := []openai.ChatCompletionMessage{
-		{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
-		{Role: openai.ChatMessageRoleUser, Content: userPrompt},
+	systemMessage := openai.ChatCompletionMessage{Role: openai.ChatMessageRoleSystem, Content: systemPrompt}
+	userMessage := openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content: userPrompt}
+
+	session, err := session2.NewAgentSession(3, systemMessage, userMessage)
+	if err != nil {
+		return nil, err
 	}
+
 	var answer string
 
 	// Human-readable trace (stderr) without huge JSON dumps.
@@ -52,7 +57,7 @@ func (r Runner) Run(model, systemPrompt, userPrompt string) (*string, error) {
 
 		req := openai.ChatCompletionRequest{
 			Model:    model,
-			Messages: messages,
+			Messages: session.GetCurrentContextWindow(),
 			Tools:    r.Tools,
 		}
 
@@ -114,7 +119,7 @@ func (r Runner) Run(model, systemPrompt, userPrompt string) (*string, error) {
 
 		// TODO: Рассмотреть возможность сделать более эффективно
 		// Append assistant's message with tool calls to history
-		messages = append(messages, msg)
+		session.AppendToHistory(msg)
 
 		for _, tc := range msg.ToolCalls {
 			toolKey := tc.Function.Name + ":" + tc.Function.Arguments
@@ -136,11 +141,11 @@ func (r Runner) Run(model, systemPrompt, userPrompt string) (*string, error) {
 					Content:    cached + "\n\n(Замечание: этот вызов инструмента уже выполнялся с теми же аргументами. Не повторяй его; продолжай рассуждение и дай итоговый ответ на основе имеющихся данных.)",
 					ToolCallID: tc.ID,
 				}
-				messages = append(messages, toolMsg)
+				session.AppendToHistory(toolMsg)
 
 				// After a few identical repeats, force a turn of summarization.
 				if repeatSameTool >= 3 {
-					messages = append(messages, openai.ChatCompletionMessage{
+					session.AppendToHistory(openai.ChatCompletionMessage{
 						Role: openai.ChatMessageRoleUser,
 						Content: "Ты зациклился на повторяющемся вызове инструмента. НЕ вызывай инструменты снова. " +
 							"Сформируй итоговый ответ/файл на основе уже полученных данных (или явно укажи, что данных недостаточно из-за блокировок сайтов).",
@@ -158,7 +163,7 @@ func (r Runner) Run(model, systemPrompt, userPrompt string) (*string, error) {
 				fmt.Fprintf(os.Stderr, "Tool(%s) -> %s\n", tc.Function.Name, compactText(toolMsg.Content, 500))
 			}
 			toolCache[toolKey] = toolMsg.Content
-			messages = append(messages, toolMsg)
+			session.AppendToHistory(toolMsg)
 		}
 	}
 
