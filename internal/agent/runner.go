@@ -27,7 +27,7 @@ func (r Runner) Run(model, systemPrompt, userPrompt string) (*string, error) {
 	systemMessage := openai.ChatCompletionMessage{Role: openai.ChatMessageRoleSystem, Content: systemPrompt}
 	userMessage := openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content: userPrompt}
 
-	session, err := session2.NewAgentSession(3, systemMessage, userMessage)
+	session, err := session2.NewAgentSession(100, systemMessage, userMessage)
 	if err != nil {
 		return nil, err
 	}

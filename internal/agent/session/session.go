@@ -37,6 +37,10 @@ func (as *AgentSession) GetCurrentContextWindow() []openai.ChatCompletionMessage
 	if n == 0 {
 		return []openai.ChatCompletionMessage{as.fixed[0], as.fixed[1]}
 	}
+	if n > len(as.history) {
+		return append([]openai.ChatCompletionMessage(nil), as.history...)
+	}
+
 	count := 0
 	i := len(as.history) - 1
 	for ; i >= 0 && count < n; i-- {
