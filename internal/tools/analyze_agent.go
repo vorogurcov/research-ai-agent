@@ -11,7 +11,7 @@ import (
 
 func runAnalyzeAgent(html, needs string) (string, error) {
 	cfg, err := config.Load(config.LoadParams{
-		ModelFlag: os.Getenv("ANALYZING_HTML_MODEL_NAME"),
+		ModelFlag: os.Getenv("ANALYZING_MODEL_NAME"),
 		Prompt:    fmt.Sprintf("Твоя задача — извлечь из текста веб-страницы только релевантную информацию по запросу: %q.\n\nТекст страницы:\n%s", needs, html),
 		SystemPrompt: "Ты — узкоспециализированный анализатор текстового содержимого веб-страниц.\n" +
 			"Твоя задача: извлекать из предоставленного HTML/текста только полезную информацию, строго по запросу needs, отсекая шум (навигацию, футеры, рекламу).\n" +

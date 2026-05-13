@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/sashabaranov/go-openai"
@@ -62,12 +63,29 @@ func (r Runner) Run(model, systemPrompt, userPrompt string) (*string, error) {
 		}
 
 		resp, err := r.Client.CreateChatCompletion(context.Background(), req)
+
 		if err != nil {
 			if r.Logger != nil {
 				_ = r.Logger.WriteNonPrettified("ERROR [llm.CreateChatCompletion]: " + err.Error())
 			}
 			return nil, fmt.Errorf("error: %w", err)
 		}
+
+		if trace {
+			if r.Logger != nil {
+				_ = r.Logger.WriteNonPrettified("TOKEN USAGE FOR REQUEST " + strconv.Itoa(resp.Usage.PromptTokens))
+			}
+		}
+
+		if !session.IsNormalTokenUsage(resp.Usage.PromptTokens) {
+			err = session.SummarizeHistory()
+			if err != nil {
+				if r.Logger != nil {
+					_ = r.Logger.WriteNonPrettified(fmt.Sprintf("ERROR WHILE SUMMARIZING %v", err))
+				}
+			}
+		}
+
 		if len(resp.Choices) == 0 {
 			if r.Logger != nil {
 				_ = r.Logger.WriteNonPrettified("ERROR [llm.CreateChatCompletion]: no choices in response")
