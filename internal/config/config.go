@@ -58,12 +58,12 @@ func Load(p LoadParams) (Config, error) {
 		return Config{}, errors.New("Model must not be empty")
 	}
 
-	apiKey := os.Getenv("OPENROUTER_API_KEY")
+	apiKey := os.Getenv("AI_API_KEY")
 	if apiKey == "" {
-		return Config{}, errors.New("Env variable OPENROUTER_API_KEY not found")
+		return Config{}, errors.New("env variable AI_API_KEY not found")
 	}
 
-	baseURL := os.Getenv("OPENROUTER_BASE_URL")
+	baseURL := os.Getenv("AI_API_BASE_URL")
 	if baseURL == "" {
 		baseURL = "https://openrouter.ai/api/v1"
 	}
