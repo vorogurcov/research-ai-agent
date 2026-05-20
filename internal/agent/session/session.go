@@ -15,6 +15,7 @@ import (
 
 var (
 	InvalidContextWindowSize = errors.New("context size can not be negative")
+	summarizationThreshold   = 18000
 )
 
 type AgentSession struct {
@@ -32,7 +33,7 @@ func NewAgentSession(n int, systemMessage openai.ChatCompletionMessage, userMess
 	fixed := [2]openai.ChatCompletionMessage{systemMessage, userMessage}
 	history := []openai.ChatCompletionMessage{fixed[0], fixed[1]}
 	contextWindowSize := n
-	summarizationTriggerThreshold := 8000
+	summarizationTriggerThreshold := summarizationThreshold
 	return &AgentSession{
 		history,
 		fixed,

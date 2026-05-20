@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/vorogurcov/ai-agent/internal/agent"
 	"github.com/vorogurcov/ai-agent/internal/config"
@@ -14,16 +16,14 @@ import (
 )
 
 func main() {
-	var prompt string
 	var modelFlag string
 
-	flag.StringVar(&prompt, "p", "", "Prompt to send to LLM")
 	flag.StringVar(&modelFlag, "m", "", "Model name")
 	flag.Parse()
 
 	cfg, err := config.Load(config.LoadParams{
 		ModelFlag: modelFlag,
-		Prompt:    prompt,
+		Prompt:    "asd",
 	})
 
 	logger, _ := logger2.GetLogger(filepath.Join(cfg.WorkspaceRoot, "log", "log.txt"), "PROD")
@@ -59,10 +59,22 @@ func main() {
 		Caller: reg,
 		Logger: logger,
 	}
-	if ans, err := runner.Run(cfg.ModelName, cfg.SystemPrompt, cfg.Prompt); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	} else {
-		fmt.Println(ans)
+
+	scanner := bufio.NewScanner(os.Stdin)
+	fmt.Println("[Agent] Started! Listening for prompts!")
+
+	for scanner.Scan() {
+		prompt := strings.TrimSpace(scanner.Text())
+		if ans, err := runner.Run(cfg.ModelName, cfg.SystemPrompt, prompt); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		} else {
+			fmt.Println(ans)
+		}
+
 	}
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintln(os.Stderr, "Ошибка чтения stdin:", err)
+	}
+	fmt.Println("[Agent] Поток stdin закрыт. Завершение работы агента.")
 }
