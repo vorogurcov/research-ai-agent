@@ -23,7 +23,6 @@ func main() {
 
 	cfg, err := config.Load(config.LoadParams{
 		ModelFlag: modelFlag,
-		Prompt:    "asd",
 	})
 
 	logger, _ := logger2.GetLogger(filepath.Join(cfg.WorkspaceRoot, "log", "log.txt"), "PROD")

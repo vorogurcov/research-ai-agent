@@ -12,7 +12,6 @@ import (
 func runAnalyzeAgent(html, needs string) (string, error) {
 	cfg, err := config.Load(config.LoadParams{
 		ModelFlag: os.Getenv("ANALYZING_MODEL_NAME"),
-		Prompt:    fmt.Sprintf("Твоя задача — извлечь из текста веб-страницы только релевантную информацию по запросу: %q.\n\nТекст страницы:\n%s", needs, html),
 		SystemPrompt: "Ты — узкоспециализированный анализатор текстового содержимого веб-страниц.\n" +
 			"Твоя задача: извлекать из предоставленного HTML/текста только полезную информацию, строго по запросу needs, отсекая шум (навигацию, футеры, рекламу).\n" +
 			"\n" +
@@ -36,6 +35,9 @@ func runAnalyzeAgent(html, needs string) (string, error) {
 			"- Не меняй факты, только извлекай и структурируй.\n" +
 			"- Если есть сомнения/ограничения качества (шум, paywall, редиректы) — пиши в \"warnings\".",
 	})
+
+	prompt := fmt.Sprintf("Твоя задача — извлечь из текста веб-страницы только релевантную информацию по запросу: %q.\n\nТекст страницы:\n%s", needs, html)
+
 	if err != nil {
 		return "", err
 	}
@@ -49,7 +51,7 @@ func runAnalyzeAgent(html, needs string) (string, error) {
 		Logger: nil,
 	}
 
-	ans, err := runner.Run(cfg.ModelName, cfg.SystemPrompt, cfg.Prompt)
+	ans, err := runner.Run(cfg.ModelName, cfg.SystemPrompt, prompt)
 	if err != nil {
 		return "", err
 	}

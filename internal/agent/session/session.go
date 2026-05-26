@@ -85,7 +85,6 @@ func (as *AgentSession) summarizeUsingLLM(messagesToSummarize []openai.ChatCompl
 
 	cfg, err := config.Load(config.LoadParams{
 		ModelFlag: os.Getenv("ANALYZING_MODEL_NAME"),
-		Prompt:    prompt,
 		SystemPrompt: "Ты — узкоспециализированный анализатор текстового содержимого .\n" +
 			"Твоя задача: извлекать из предоставленного текста только полезную информацию, отсекая шум (пустые ответы, теги ненужные, и тд).\n" +
 			"\n" +
@@ -98,7 +97,7 @@ func (as *AgentSession) summarizeUsingLLM(messagesToSummarize []openai.ChatCompl
 
 	client := llm.NewAPIClient(cfg.AIApiKey, cfg.APIBaseURL)
 	systemMessage := openai.ChatCompletionMessage{Role: openai.ChatMessageRoleSystem, Content: cfg.SystemPrompt}
-	userMessage := openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content: cfg.Prompt}
+	userMessage := openai.ChatCompletionMessage{Role: openai.ChatMessageRoleUser, Content: prompt}
 
 	req := openai.ChatCompletionRequest{
 		Model:    cfg.ModelName,

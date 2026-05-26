@@ -10,8 +10,6 @@ import (
 )
 
 type Config struct {
-	Prompt string
-
 	ModelName string
 
 	AIApiKey   string
@@ -22,7 +20,6 @@ type Config struct {
 }
 
 type LoadParams struct {
-	Prompt       string
 	ModelFlag    string
 	SystemPrompt string
 }
@@ -31,9 +28,6 @@ func Load(p LoadParams) (Config, error) {
 	// Best-effort load local env; ok if missing.
 	_ = godotenv.Load(".env")
 
-	if p.Prompt == "" {
-		return Config{}, errors.New("Prompt must not be empty")
-	}
 	if p.SystemPrompt == "" {
 		p.SystemPrompt = `Ты — основной ассистент агента. Отвечай по делу, структурированно и без лишнего текста.
 
@@ -75,7 +69,6 @@ func Load(p LoadParams) (Config, error) {
 	workspaceRoot := filepath.Clean(cwd)
 
 	return Config{
-		Prompt:        p.Prompt,
 		ModelName:     model,
 		AIApiKey:      apiKey,
 		APIBaseURL:    baseURL,
