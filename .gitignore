@@ -39,3 +39,6 @@ docs/
 
 # Log
 log
+
+# generated proto
+api/gen
