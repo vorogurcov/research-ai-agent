@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
+	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"github.com/sashabaranov/go-openai"
 	"github.com/vorogurcov/ai-agent/internal/config"
 	"github.com/vorogurcov/ai-agent/internal/llm"
@@ -19,10 +22,11 @@ var (
 )
 
 type AgentSession struct {
-	history                       []openai.ChatCompletionMessage
 	fixed                         [2]openai.ChatCompletionMessage
 	contextWindowSize             int
 	summarizationTriggerThreshold int
+	redisClient                   *redis.Client
+	historyKey                    string
 }
 
 func NewAgentSession(n int, systemMessage openai.ChatCompletionMessage, userMessage openai.ChatCompletionMessage) (*AgentSession, error) {
@@ -34,11 +38,36 @@ func NewAgentSession(n int, systemMessage openai.ChatCompletionMessage, userMess
 	history := []openai.ChatCompletionMessage{fixed[0], fixed[1]}
 	contextWindowSize := n
 	summarizationTriggerThreshold := summarizationThreshold
+	sessionId := uuid.NewString()
+	historyKey := fmt.Sprintf("history:%v", sessionId)
+	var redisAddr string
+	if os.Getenv("DOCKER_ENV") == "TRUE" {
+		redisAddr = os.Getenv("DOCKER_REDIS_URL")
+	} else {
+		redisAddr = os.Getenv("LOCAL_REDIS_URL")
+	}
+	if redisAddr == "" {
+		log.Fatal("redis addr is not set")
+	}
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     redisAddr,
+		Password: "", // no password
+		DB:       0,  // use default DB
+		Protocol: 2,
+	})
+	b, _ := json.Marshal(history)
+
+	err := redisClient.Set(context.Background(), historyKey, b, 0).Err()
+	if err != nil {
+		fmt.Println(err)
+		log.Fatal(err)
+	}
 	return &AgentSession{
-		history,
 		fixed,
 		contextWindowSize,
 		summarizationTriggerThreshold,
+		redisClient,
+		historyKey,
 	}, nil
 }
 
@@ -49,9 +78,16 @@ func (as *AgentSession) GetCurrentContextWindow() []openai.ChatCompletionMessage
 	}
 
 	count := 0
-	i := len(as.history) - 1
+	historyJson, err := as.redisClient.Get(context.Background(), as.historyKey).Result()
+	var history []openai.ChatCompletionMessage
+	err = json.Unmarshal([]byte(historyJson), &history)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	i := len(history) - 1
 	for ; i >= 0 && count < n; i-- {
-		if len(as.history[i].ToolCalls) > 0 {
+		if len(history[i].ToolCalls) > 0 {
 			count++
 		}
 	}
@@ -59,14 +95,28 @@ func (as *AgentSession) GetCurrentContextWindow() []openai.ChatCompletionMessage
 	if start < 2 {
 		start = 2
 	}
-	out := make([]openai.ChatCompletionMessage, 0, 2+len(as.history[start:]))
+	out := make([]openai.ChatCompletionMessage, 0, 2+len(history[start:]))
 	out = append(out, as.fixed[0], as.fixed[1])
-	out = append(out, as.history[start:]...)
+	out = append(out, history[start:]...)
 	return out
 }
 
 func (as *AgentSession) AppendToHistory(newMessage openai.ChatCompletionMessage) {
-	as.history = append(as.history, newMessage)
+	historyJson, err := as.redisClient.Get(context.Background(), as.historyKey).Result()
+	var history []openai.ChatCompletionMessage
+	err = json.Unmarshal([]byte(historyJson), &history)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	history = append(history, newMessage)
+	b, _ := json.Marshal(history)
+
+	err = as.redisClient.Set(context.Background(), as.historyKey, b, 0).Err()
+	if err != nil {
+		fmt.Println(err)
+		log.Fatal(err)
+	}
 }
 
 func (as *AgentSession) IsNormalTokenUsage(promptTokens int) bool {
@@ -118,7 +168,14 @@ func (as *AgentSession) summarizeUsingLLM(messagesToSummarize []openai.ChatCompl
 	return answerMessage, nil
 }
 func (as *AgentSession) SummarizeHistory() error {
-	messagesToSummarize := as.history[2:]
+	historyJson, err := as.redisClient.Get(context.Background(), as.historyKey).Result()
+	var history []openai.ChatCompletionMessage
+	err = json.Unmarshal([]byte(historyJson), &history)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	messagesToSummarize := history[2:]
 	ans, err := as.summarizeUsingLLM(messagesToSummarize)
 	if err != nil {
 		return err
@@ -126,6 +183,16 @@ func (as *AgentSession) SummarizeHistory() error {
 	out := make([]openai.ChatCompletionMessage, 0, 3)
 	out = append(out, as.fixed[0], as.fixed[1])
 	out = append(out, ans)
-	as.history = out
+	history = out
+
+	b, _ := json.Marshal(history)
+
+	err = as.redisClient.Set(context.Background(), as.historyKey, b, 0).Err()
+	if err != nil {
+		fmt.Println(err)
+		log.Fatal(err)
+		return err
+	}
+
 	return nil
 }

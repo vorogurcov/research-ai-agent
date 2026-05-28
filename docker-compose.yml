@@ -1,0 +1,32 @@
+services:
+  agent-grpc:
+    build: .
+    container_name: agent-grpc-container
+    ports:
+      - "3333:3333"
+    env_file:
+      - .env
+    environment:
+      GRPC_LISTEN_ADDR: ":3333"
+      DOCKER_ENV: "TRUE"
+    volumes:
+      - type: bind
+        source: ./writes
+        target: /app/writes
+      - type: bind
+        source: ./log
+        target: /app/log
+    restart: unless-stopped
+
+  redis:
+    image: redis:8.6
+    container_name: redis-cache
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+    driver: local

@@ -16,6 +16,7 @@ import (
 	agentGrpc "github.com/vorogurcov/ai-agent/internal/transport/grpc"
 	logger2 "github.com/vorogurcov/ai-agent/internal/utils/logger"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 func main() {
@@ -63,13 +64,19 @@ func main() {
 	}
 	fmt.Println("[Agent] Started! Listening for prompts!")
 
-	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", 3333))
+	addr := os.Getenv("GRPC_LISTEN_ADDR")
+	if addr == "" {
+		addr = ":3333"
+	}
+	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
 	grpcServer := grpc.NewServer()
 	agentv1.RegisterResearchAgentServer(grpcServer, agentGrpc.NewAgentGRPCServer(&cfg, &runner))
+	reflection.Register(grpcServer)
+
 	grpcServer.Serve(lis)
 
 	fmt.Println("[Agent] Поток stdin закрыт. Завершение работы агента.")
